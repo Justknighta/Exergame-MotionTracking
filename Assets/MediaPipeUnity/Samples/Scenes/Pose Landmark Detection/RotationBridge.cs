@@ -17,6 +17,18 @@ public class RotationBridge : MonoBehaviour
     public Transform spineBone; // B-spine
     public Transform headBone;  // B-head
 
+    [Header("💀 กระดูก Avatar (หัวไหล่ + มือ)")]
+    public Transform leftShoulder;   // B-shoulder.L (หรือ clavicle)
+    public Transform rightShoulder;  // B-shoulder.R
+    public Transform leftHand;       // B-hand.L
+    public Transform rightHand;      // B-hand.R
+
+    [Header("⚙️ Hand Settings")]
+    public Vector3 handAxis = new Vector3(0, 1, 0);   // แกน local ของมือ (คล้าย boneAxis แต่แยก)
+    public Vector3 fixHandRotation = Vector3.zero;
+    public float shoulderWeight = 0.5f; // หัวไหล่ขยับ “น้อยกว่า” แขนบน (กันสั่น)
+
+
     [Header("🪞 โหมดกระจก (Mirror)")]
     public bool useMirrorEffect = true; 
 
@@ -35,7 +47,7 @@ public class RotationBridge : MonoBehaviour
     public Vector3 fixHeadRotation = Vector3.zero;
 
     [Header("⚙️ ความไว")]
-    public float smooth = 25f;
+    public float smooth = 40f;
     public float bodySensitivity = 1.5f; 
 
     private bool autoInvertX = false; 
@@ -70,16 +82,18 @@ public class RotationBridge : MonoBehaviour
         autoInvertX = !useMirrorEffect;
 
         // 1. แขน (Arms)
+        // 1. แขน (Arms)
         if (useMirrorEffect)
         {
-            if (leftUpperArm) ProcessArm(leftUpperArm, leftForeArm, landmarks[11], landmarks[13], landmarks[15], false);
-            if (rightUpperArm) ProcessArm(rightUpperArm, rightForeArm, landmarks[12], landmarks[14], landmarks[16], true);
+            if (leftUpperArm)  ProcessArm(leftUpperArm, leftForeArm, leftHand,  landmarks[11], landmarks[13], landmarks[15], landmarks[19], false);
+            if (rightUpperArm) ProcessArm(rightUpperArm, rightForeArm, rightHand, landmarks[12], landmarks[14], landmarks[16], landmarks[20], true);
         }
         else
         {
-            if (leftUpperArm) ProcessArm(leftUpperArm, leftForeArm, landmarks[12], landmarks[14], landmarks[16], false);
-            if (rightUpperArm) ProcessArm(rightUpperArm, rightForeArm, landmarks[11], landmarks[13], landmarks[15], true);
+            if (leftUpperArm)  ProcessArm(leftUpperArm, leftForeArm, leftHand,  landmarks[12], landmarks[14], landmarks[16], landmarks[20], false);
+            if (rightUpperArm) ProcessArm(rightUpperArm, rightForeArm, rightHand, landmarks[11], landmarks[13], landmarks[15], landmarks[19], true);
         }
+
 
         // 2. ลำตัว (Spine)
         if (spineBone)
@@ -116,17 +130,28 @@ public class RotationBridge : MonoBehaviour
         hasNewResult = false;
     }
 
-    void ProcessArm(Transform upper, Transform lower, 
-                     Mediapipe.Tasks.Components.Containers.NormalizedLandmark s, 
-                     Mediapipe.Tasks.Components.Containers.NormalizedLandmark e, 
-                     Mediapipe.Tasks.Components.Containers.NormalizedLandmark w,
-                     bool isRightSide)
+    void ProcessArm(
+        Transform upper, Transform lower, Transform hand,
+        Mediapipe.Tasks.Components.Containers.NormalizedLandmark s,
+        Mediapipe.Tasks.Components.Containers.NormalizedLandmark e,
+        Mediapipe.Tasks.Components.Containers.NormalizedLandmark w,
+        Mediapipe.Tasks.Components.Containers.NormalizedLandmark index,
+        bool isRightSide)
     {
-        Vector3 dirUp = GetDir(s, e);
+        Vector3 dirUp  = GetDir(s, e);
         Vector3 dirLow = GetDir(e, w);
+
         RotateArmBone(upper, dirUp, isRightSide);
         RotateArmBone(lower, dirLow, isRightSide);
+
+        // ✅ หมุนมือด้วยทิศ wrist -> index
+        if (hand != null)
+        {
+            Vector3 dirHand = GetDir(w, index);
+            RotateHandBone(hand, dirHand, isRightSide);
+        }
     }
+
 
     void RotateArmBone(Transform bone, Vector3 direction, bool isRightSide)
     {
@@ -136,6 +161,16 @@ public class RotationBridge : MonoBehaviour
         Quaternion offsetRot = Quaternion.Euler(fixArmRotation.x, fixArmRotation.y * invY, fixArmRotation.z * invZ);
         bone.rotation = Quaternion.Slerp(bone.rotation, baseRot * offsetRot, Time.deltaTime * smooth);
     }
+    void RotateHandBone(Transform bone, Vector3 direction, bool isRightSide)
+    {
+        Quaternion baseRot = Quaternion.FromToRotation(handAxis, direction);
+        float invZ = isRightSide ? -1f : 1f;
+        float invY = isRightSide ? -1f : 1f;
+        Quaternion offsetRot = Quaternion.Euler(fixHandRotation.x, fixHandRotation.y * invY, fixHandRotation.z * invZ);
+
+        bone.rotation = Quaternion.Slerp(bone.rotation, baseRot * offsetRot, Time.deltaTime * smooth);
+    }
+
 
     Vector3 GetDir(Mediapipe.Tasks.Components.Containers.NormalizedLandmark from, Mediapipe.Tasks.Components.Containers.NormalizedLandmark to)
     {

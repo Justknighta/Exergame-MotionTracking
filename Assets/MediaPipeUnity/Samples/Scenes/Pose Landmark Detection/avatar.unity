@@ -433,6 +433,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1064799461}
   - component: {fileID: 1064799468}
+  - component: {fileID: 1064799469}
   m_Layer: 0
   m_Name: Solution
   m_TagString: Untagged
@@ -471,6 +472,28 @@ MonoBehaviour:
   screen: {fileID: 1006057043}
   runningMode: 0
   _poseLandmarkerResultAnnotationController: {fileID: 1006057044}
+--- !u!114 &1064799469
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1064799459}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5684c2109d848f74db6db7a4011237da, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  runner: {fileID: 0}
+  enterAngleDeg: 18
+  exitAngleDeg: 12
+  holdSeconds: 0.6
+  smoothing: 0.15
+--- !u!4 &1093956847 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 9066601937050683683, guid: 8e1471e805192fd4e902f7cc7eec8378, type: 3}
+  m_PrefabInstance: {fileID: 1411346066}
+  m_PrefabAsset: {fileID: 0}
 --- !u!224 &1229135957 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 3259285889726014650, guid: 5713b959e3c77a58fb258133fc8e4aef, type: 3}
@@ -588,6 +611,13 @@ MonoBehaviour:
   rightForeArm: {fileID: 1432780345}
   spineBone: {fileID: 1539740770}
   headBone: {fileID: 756776120}
+  leftShoulder: {fileID: 0}
+  rightShoulder: {fileID: 0}
+  leftHand: {fileID: 1600013986}
+  rightHand: {fileID: 1093956847}
+  handAxis: {x: 0, y: 1, z: 0}
+  fixHandRotation: {x: 0, y: 0, z: 0}
+  shoulderWeight: 0.5
   useMirrorEffect: 1
   boneAxis: {x: 0, y: 1, z: 0}
   invertHead: 1
@@ -605,6 +635,11 @@ Transform:
 --- !u!4 &1539740770 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5656644557849320307, guid: 8e1471e805192fd4e902f7cc7eec8378, type: 3}
+  m_PrefabInstance: {fileID: 1411346066}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &1600013986 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6146537482601671296, guid: 8e1471e805192fd4e902f7cc7eec8378, type: 3}
   m_PrefabInstance: {fileID: 1411346066}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1806680259
