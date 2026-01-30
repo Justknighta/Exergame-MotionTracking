@@ -9,18 +9,17 @@ public class SideNeckStretchDetector : MonoBehaviour
     [Header("References")]
     [SerializeField] private PoseLandmarkerRunner runner;
 
-    [Header("Thresholds (deg)")]
-    public float enterAngleDeg = 15f;
-    public float exitAngleDeg  = 12f;
-    public float holdSeconds   = 0.6f;
+    [Header("Target Tilt (deg)")]
+    public float targetAngleDeg = 45f;   // เป้าหมายเอียงคอ 45 องศา
+    public float toleranceDeg   = 10f;   // คลาดเคลื่อนได้ ± เท่านี้ (เช่น 10 = ช่วง 35-55)
 
     [Header("Smoothing")]
-    [Range(0f, 1f)] public float smoothing = 0.15f;
+    [Range(0f, 1f)] public float smoothing = 0.20f;
 
     [Header("Session Test")]
     public KeyCode startKey = KeyCode.A;
-    public float sessionDuration = 60f;
-    public float checkInterval   = 5f;
+    public float sessionDuration = 60f;   // 1 นาที
+    public float checkInterval   = 5f;    // ทุก 5 วิ
 
     private PoseLandmarkerResult _result;
     private bool _hasResult;
@@ -32,25 +31,16 @@ public class SideNeckStretchDetector : MonoBehaviour
     private bool _sessionActive;
     private float _sessionTimer;
     private float _bucketTimer;
-    private int _bucketIndex;
+    private int _bucketIndex; // 0..11
 
-    // bucket accumulators
+    // bucket accumulators (ในช่วง 5 วิ)
     private int _framesTotal;
     private int _framesValid;
-    private int _framesCorrect;
-    private float _sumAbsAngle;
+    private int _framesCorrect;   // เข้าโซน ±45 ภายใน tolerance
+    private float _sumAbsAngle;   // สำหรับดูความนิ่ง
     private float _sumSqAbsAngle;
 
     private readonly object _resultLock = new object();
-
-    bool TryGetLm(System.Collections.Generic.IList<NormalizedLandmark> lm, int idx, out NormalizedLandmark p)
-    {
-        p = default;
-        if (lm == null) return false;
-        if (idx < 0 || idx >= lm.Count) return false;
-        p = lm[idx];
-        return true;
-    }
 
     void Awake()
     {
@@ -65,7 +55,7 @@ public class SideNeckStretchDetector : MonoBehaviour
         }
 
         runner.OnPoseResult += OnPoseResult;
-        Debug.Log("พร้อมแล้ว: กด A เพื่อเริ่มทดสอบ 1 นาที (ประเมินทุก 5 วิ)");
+        Debug.Log("พร้อมแล้ว: กด A เพื่อเริ่มทดสอบ 1 นาที (ประเมินทุก 5 วิ) | โซนถูก ≈ ±45°");
     }
 
     void OnDestroy()
@@ -73,7 +63,6 @@ public class SideNeckStretchDetector : MonoBehaviour
         if (runner != null) runner.OnPoseResult -= OnPoseResult;
     }
 
-    // ✅ เหลืออันเดียว (มี lock)
     private void OnPoseResult(PoseLandmarkerResult result)
     {
         lock (_resultLock)
@@ -85,6 +74,7 @@ public class SideNeckStretchDetector : MonoBehaviour
 
     void Update()
     {
+        // กด A เพื่อเริ่มใหม่
         if (Input.GetKeyDown(startKey))
         {
             StartSession();
@@ -97,6 +87,7 @@ public class SideNeckStretchDetector : MonoBehaviour
 
         EvaluateFrame();
 
+        // ครบ 5 วิ → ตัดเกรดช่วงนี้
         if (_bucketTimer >= checkInterval)
         {
             _bucketTimer -= checkInterval;
@@ -105,6 +96,7 @@ public class SideNeckStretchDetector : MonoBehaviour
             _bucketIndex++;
         }
 
+        // ครบ 60 วิ → จบ session
         if (_sessionTimer >= sessionDuration)
         {
             EndSession();
@@ -126,6 +118,7 @@ public class SideNeckStretchDetector : MonoBehaviour
     {
         _sessionActive = false;
 
+        // เผื่อจบคาเฟรมสุดท้าย
         if (_framesTotal > 0)
         {
             GradeBucket(finalPartial: true);
@@ -141,6 +134,23 @@ public class SideNeckStretchDetector : MonoBehaviour
         _framesCorrect = 0;
         _sumAbsAngle = 0f;
         _sumSqAbsAngle = 0f;
+    }
+
+    // ทำให้มุมอยู่ในช่วง -180..180 แบบไม่ “ติดเพดาน”
+    float NormalizeAngle180(float a)
+    {
+        a = (a + 180f) % 360f;
+        if (a < 0f) a += 360f;
+        return a - 180f;
+    }
+
+    bool TryGetLm(System.Collections.Generic.IList<NormalizedLandmark> lm, int idx, out NormalizedLandmark p)
+    {
+        p = default;
+        if (lm == null) return false;
+        if (idx < 0 || idx >= lm.Count) return false;
+        p = lm[idx];
+        return true;
     }
 
     void EvaluateFrame()
@@ -161,6 +171,7 @@ public class SideNeckStretchDetector : MonoBehaviour
 
         if (lmSnapshot == null) return;
 
+        // ใช้หู + ไหล่ (นิ่ง)
         const int LEFT_EAR = 7, RIGHT_EAR = 8, LEFT_SHOULDER = 11, RIGHT_SHOULDER = 12;
 
         if (!TryGetLm(lmSnapshot, LEFT_SHOULDER, out var lsP) ||
@@ -182,17 +193,25 @@ public class SideNeckStretchDetector : MonoBehaviour
         Vector3 earMid = (le + re) * 0.5f;
         Vector3 headVec = earMid - shoulderMid;
 
+        // มุมเอียงซ้าย/ขวา (มองในระนาบ XY)
         float rawAngle = Mathf.Atan2(headVec.x, headVec.y) * Mathf.Rad2Deg;
-        rawAngle = Mathf.Clamp(rawAngle, -90f, 90f);
+        rawAngle = NormalizeAngle180(rawAngle);
 
         _lastRawAngle = rawAngle;
 
+        // กรองสั่น
         _filteredAngle = Mathf.Lerp(_filteredAngle, rawAngle, smoothing);
 
         float absA = Mathf.Abs(_filteredAngle);
 
-        if (absA >= enterAngleDeg) _framesCorrect++;
+        // ✅ “ถูก” เมื่อเข้าโซนใกล้ +45 หรือ -45 ภายใน tolerance
+        bool inTarget =
+            Mathf.Abs(_filteredAngle - targetAngleDeg) <= toleranceDeg ||
+            Mathf.Abs(_filteredAngle + targetAngleDeg) <= toleranceDeg;
 
+        if (inTarget) _framesCorrect++;
+
+        // ความนิ่ง (std ของ abs(angle))
         _sumAbsAngle += absA;
         _sumSqAbsAngle += absA * absA;
     }
@@ -205,12 +224,13 @@ public class SideNeckStretchDetector : MonoBehaviour
             return;
         }
 
-        float correctRatio = (float)_framesCorrect / _framesValid;
+        float correctRatio = (float)_framesCorrect / _framesValid; // 0..1
 
         float mean = _sumAbsAngle / _framesValid;
         float var = (_sumSqAbsAngle / _framesValid) - (mean * mean);
         float std = Mathf.Sqrt(Mathf.Max(0f, var));
 
+        // เกณฑ์คะแนน
         string grade;
         if (correctRatio >= 0.80f && std <= 6.0f) grade = "EXCELLENT";
         else if (correctRatio >= 0.50f) grade = "GOOD";
@@ -220,7 +240,7 @@ public class SideNeckStretchDetector : MonoBehaviour
         int secTo = secFrom + (int)checkInterval;
 
         Debug.Log($"[{secFrom:00}-{secTo:00}s] {grade} | correct={correctRatio:P0} | std≈{std:F1} | validFrames={_framesValid}");
-        Debug.Log($"rawAngle={_lastRawAngle:F1} filtered={_filteredAngle:F1}");
+        Debug.Log($"rawAngle={_lastRawAngle:F1} filtered={_filteredAngle:F1} | target=±{targetAngleDeg} tol=±{toleranceDeg}");
     }
 
     string BucketLabel(bool finalPartial)
