@@ -74,6 +74,18 @@ public class RotationBridge : MonoBehaviour
         latestResult = result;
         hasNewResult = true;
     }
+    bool TryGetLm(
+        System.Collections.Generic.IList<Mediapipe.Tasks.Components.Containers.NormalizedLandmark> lm,
+        int idx,
+        out Mediapipe.Tasks.Components.Containers.NormalizedLandmark p)
+    {
+        p = default;
+        if (lm == null) return false;
+        if (idx < 0 || idx >= lm.Count) return false;
+        p = lm[idx];
+        return true;
+    }
+
 
     void LateUpdate()
     {
@@ -85,47 +97,71 @@ public class RotationBridge : MonoBehaviour
         // 1. แขน (Arms)
         if (useMirrorEffect)
         {
-            if (leftUpperArm)  ProcessArm(leftUpperArm, leftForeArm, leftHand,  landmarks[11], landmarks[13], landmarks[15], landmarks[19], false);
-            if (rightUpperArm) ProcessArm(rightUpperArm, rightForeArm, rightHand, landmarks[12], landmarks[14], landmarks[16], landmarks[20], true);
+            if (leftUpperArm &&
+                TryGetLm(landmarks, 11, out var ls) &&
+                TryGetLm(landmarks, 13, out var le) &&
+                TryGetLm(landmarks, 15, out var lw) &&
+                TryGetLm(landmarks, 19, out var li))
+            {
+                ProcessArm(leftUpperArm, leftForeArm, leftHand, ls, le, lw, li, false);
+            }
+
+            if (rightUpperArm &&
+                TryGetLm(landmarks, 12, out var rs) &&
+                TryGetLm(landmarks, 14, out var re) &&
+                TryGetLm(landmarks, 16, out var rw) &&
+                TryGetLm(landmarks, 20, out var ri))
+            {
+                ProcessArm(rightUpperArm, rightForeArm, rightHand, rs, re, rw, ri, true);
+            }
         }
-        else
-        {
-            if (leftUpperArm)  ProcessArm(leftUpperArm, leftForeArm, leftHand,  landmarks[12], landmarks[14], landmarks[16], landmarks[20], false);
-            if (rightUpperArm) ProcessArm(rightUpperArm, rightForeArm, rightHand, landmarks[11], landmarks[13], landmarks[15], landmarks[19], true);
-        }
+
 
 
         // 2. ลำตัว (Spine)
         if (spineBone)
+        if (TryGetLm(landmarks, 11, out var leftSh) && TryGetLm(landmarks, 12, out var rightSh))
         {
-            var leftSh = landmarks[11]; var rightSh = landmarks[12];
             float slopeY = (leftSh.y - rightSh.y);
             float slopeX = (leftSh.x - rightSh.x);
             float leanAngle = Mathf.Atan2(slopeY, slopeX) * Mathf.Rad2Deg;
-            
-            // Logic กลับด้านตัว
-            if (useMirrorEffect) leanAngle = -leanAngle;
-            if (invertSpine) leanAngle = -leanAngle; // ⭐ กลับด้านอีกรอบถ้าติ๊ก
 
-            Quaternion targetSpine = initialSpineRot * Quaternion.Euler(fixSpineRotation.x, fixSpineRotation.y, (leanAngle * bodySensitivity) + fixSpineRotation.z);
-            spineBone.rotation = Quaternion.Slerp(spineBone.rotation, targetSpine, Time.deltaTime * smooth);
+            if (useMirrorEffect) leanAngle = -leanAngle;
+            if (invertSpine) leanAngle = -leanAngle;
+
+            Quaternion targetSpine =
+                initialSpineRot *
+                Quaternion.Euler(
+                    fixSpineRotation.x,
+                    fixSpineRotation.y,
+                    (leanAngle * bodySensitivity) + fixSpineRotation.z);
+
+            spineBone.rotation =
+                Quaternion.Slerp(spineBone.rotation, targetSpine, Time.deltaTime * smooth);
         }
 
+
         // 3. หัว (Head)
-        if (headBone)
+        if (TryGetLm(landmarks, 7, out var leftEar) && TryGetLm(landmarks, 8, out var rightEar))
         {
-            var leftEar = landmarks[7]; var rightEar = landmarks[8];
             float headSlopeY = (leftEar.y - rightEar.y);
             float headSlopeX = (leftEar.x - rightEar.x);
             float headTilt = Mathf.Atan2(headSlopeY, headSlopeX) * Mathf.Rad2Deg;
-            
-            // Logic กลับด้านหัว
-            if (useMirrorEffect) headTilt = -headTilt;
-            if (invertHead) headTilt = -headTilt; // ⭐ กลับด้านอีกรอบถ้าติ๊ก
 
-            Quaternion targetHead = initialHeadRot * Quaternion.Euler(fixHeadRotation.x, fixHeadRotation.y, headTilt + fixHeadRotation.z);
-            headBone.rotation = Quaternion.Slerp(headBone.rotation, targetHead, Time.deltaTime * smooth);
+            if (useMirrorEffect) headTilt = -headTilt;
+            if (invertHead) headTilt = -headTilt;
+
+            Quaternion targetHead =
+                initialHeadRot *
+                Quaternion.Euler(
+                    fixHeadRotation.x,
+                    fixHeadRotation.y,
+                    headTilt + fixHeadRotation.z);
+
+            headBone.rotation =
+                Quaternion.Slerp(headBone.rotation, targetHead, Time.deltaTime * smooth);
         }
+
         
         hasNewResult = false;
     }
