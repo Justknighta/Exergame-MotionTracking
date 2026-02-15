@@ -111,8 +111,13 @@ public class SideNeckStretchDetector : MonoBehaviour
         _bucketIndex = 0;
 
         ResetBucket();
+
+        _filteredAngle = 0f;
+        _lastRawAngle = 0f;
+
         Debug.Log("▶ เริ่มทดสอบ 1 นาทีแล้ว (ประเมินทุก 5 วิ)...");
     }
+
 
     void EndSession()
     {
@@ -136,14 +141,6 @@ public class SideNeckStretchDetector : MonoBehaviour
         _sumSqAbsAngle = 0f;
     }
 
-    // ทำให้มุมอยู่ในช่วง -180..180 แบบไม่ “ติดเพดาน”
-    float NormalizeAngle180(float a)
-    {
-        a = (a + 180f) % 360f;
-        if (a < 0f) a += 360f;
-        return a - 180f;
-    }
-
     bool TryGetLm(System.Collections.Generic.IList<NormalizedLandmark> lm, int idx, out NormalizedLandmark p)
     {
         p = default;
@@ -157,31 +154,26 @@ public class SideNeckStretchDetector : MonoBehaviour
     {
         _framesTotal++;
 
-        System.Collections.Generic.List<NormalizedLandmark> lmSnapshot = null;
+        NormalizedLandmark lsP = default, rsP = default, leP = default, reP = default;
+        bool ok = false;
 
         lock (_resultLock)
         {
-            if (!_hasResult || _result.poseLandmarks == null || _result.poseLandmarks.Count == 0)
-                return;
-
-            var lm = _result.poseLandmarks[0].landmarks;
-            if (lm != null)
-                lmSnapshot = new System.Collections.Generic.List<NormalizedLandmark>(lm);
+            if (_hasResult && _result.poseLandmarks != null && _result.poseLandmarks.Count > 0)
+            {
+                var lm = _result.poseLandmarks[0].landmarks;
+                if (lm != null
+                    && TryGetLm(lm, 11, out lsP)
+                    && TryGetLm(lm, 12, out rsP)
+                    && TryGetLm(lm, 7,  out leP)
+                    && TryGetLm(lm, 8,  out reP))
+                {
+                    ok = true;
+                }
+            }
         }
 
-        if (lmSnapshot == null) return;
-
-        // ใช้หู + ไหล่ (นิ่ง)
-        const int LEFT_EAR = 7, RIGHT_EAR = 8, LEFT_SHOULDER = 11, RIGHT_SHOULDER = 12;
-
-        if (!TryGetLm(lmSnapshot, LEFT_SHOULDER, out var lsP) ||
-            !TryGetLm(lmSnapshot, RIGHT_SHOULDER, out var rsP) ||
-            !TryGetLm(lmSnapshot, LEFT_EAR, out var leP) ||
-            !TryGetLm(lmSnapshot, RIGHT_EAR, out var reP))
-        {
-            return;
-        }
-
+        if (!ok) return;
         _framesValid++;
 
         Vector3 ls = ToVec(lsP);
@@ -193,16 +185,23 @@ public class SideNeckStretchDetector : MonoBehaviour
         Vector3 earMid = (le + re) * 0.5f;
         Vector3 headVec = earMid - shoulderMid;
 
-        // มุมเอียงซ้าย/ขวา (มองในระนาบ XY)
-        float rawAngle = Mathf.Atan2(headVec.x, headVec.y) * Mathf.Rad2Deg;
-        rawAngle = NormalizeAngle180(rawAngle);
+        // ใช้ dy แบบ Abs เพื่อลดปัญหาแกน y กลับทิศ/ติดลบ
+        float dx = headVec.x;
+        float dy = Mathf.Abs(headVec.y) + 1e-5f;
+
+        // 0 = หัวตรง, เอียงมากขึ้น = องศามากขึ้น (ซ้าย/ขวาใช้เครื่องหมายจาก dx)
+        float rawAngle = Mathf.Atan2(dx, dy) * Mathf.Rad2Deg;
+
+        // จำกัดช่วงเอียงคอ
+        rawAngle = Mathf.Clamp(rawAngle, -80f, 80f);
 
         _lastRawAngle = rawAngle;
 
-        // กรองสั่น
+        // กรองสั่น (เอาแค่ครั้งเดียว)
         _filteredAngle = Mathf.Lerp(_filteredAngle, rawAngle, smoothing);
 
         float absA = Mathf.Abs(_filteredAngle);
+
 
         // ✅ “ถูก” เมื่อเข้าโซนใกล้ +45 หรือ -45 ภายใน tolerance
         bool inTarget =
