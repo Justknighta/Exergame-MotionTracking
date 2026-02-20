@@ -10,8 +10,8 @@ public class SideNeckStretchDetector : MonoBehaviour
     [SerializeField] private PoseLandmarkerRunner runner;
 
     [Header("Target Tilt (deg)")]
-    public float targetAngleDeg = 45f;   // เป้าหมายเอียงคอ 45 องศา
-    public float toleranceDeg   = 10f;   // คลาดเคลื่อนได้ ± เท่านี้ (เช่น 10 = ช่วง 35-55)
+    public float targetAngleDeg = 20f;   // เป้าหมายเอียงคอ 45 องศา
+    public float toleranceDeg   = 8f;   // คลาดเคลื่อนได้ ± เท่านี้ (เช่น 10 = ช่วง 35-55)
 
     [Header("Smoothing")]
     [Range(0f, 1f)] public float smoothing = 0.20f;

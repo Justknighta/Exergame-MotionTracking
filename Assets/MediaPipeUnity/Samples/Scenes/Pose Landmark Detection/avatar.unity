@@ -485,9 +485,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   runner: {fileID: 0}
-  enterAngleDeg: 18
-  exitAngleDeg: 12
-  holdSeconds: 0.6
+  targetAngleDeg: 25
+  toleranceDeg: 8
   smoothing: 0.15
   startKey: 97
   sessionDuration: 60
