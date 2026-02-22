@@ -13,10 +13,15 @@ public class SideNeckStretchRule : PoseRuleBase
     public float targetAngleDeg = 20f;
     public float toleranceDeg = 8f;
 
+    [Header("Direction")]
+    public bool stretchLeft = true; // ✅ ติ๊ก = ซ้าย, ไม่ติ๊ก = ขวา
+
     [Header("Smoothing")]
     [Range(0f, 1f)] public float smoothing = 0.20f;
 
-    public virtual float DefaultDuration => 60f;
+    public override string PoseName => "Side Neck Stretch";
+    public override float DurationSec => 60f;
+    public override int PassBonusScore => 100;
 
     private PoseLandmarkerResult _result;
     private bool _hasResult;
@@ -84,7 +89,6 @@ public class SideNeckStretchRule : PoseRuleBase
         }
 
         if (!ok) return false;
-
         valid = true;
 
         Vector3 ls = ToVec(lsP);
@@ -105,17 +109,18 @@ public class SideNeckStretchRule : PoseRuleBase
         _lastRawAngle = rawAngle;
         _filteredAngle = Mathf.Lerp(_filteredAngle, rawAngle, smoothing);
 
-        // “ถูก” เมื่อเข้าโซนใกล้ +target หรือ -target ภายใน tolerance
-        bool inTarget =
-            Mathf.Abs(_filteredAngle - targetAngleDeg) <= toleranceDeg ||
-            Mathf.Abs(_filteredAngle + targetAngleDeg) <= toleranceDeg;
+        // ✅ เลือกข้าง: ซ้าย = มุมติดลบ, ขวา = มุมบวก
+        float desired = stretchLeft ? -targetAngleDeg : +targetAngleDeg;
+        bool inTarget = Mathf.Abs(_filteredAngle - desired) <= toleranceDeg;
 
         return inTarget;
     }
 
     public override string GetDebugText()
     {
-        return $"Angle(raw/filtered): {_lastRawAngle:F1} / {_filteredAngle:F1} | target=±{targetAngleDeg} tol=±{toleranceDeg}";
+        string dir = stretchLeft ? "LEFT" : "RIGHT";
+        float desired = stretchLeft ? -targetAngleDeg : +targetAngleDeg;
+        return $"SideNeck({dir}) raw/filtered: {_lastRawAngle:F1}/{_filteredAngle:F1} | target={desired:F1} tol=±{toleranceDeg}";
     }
 
     private bool TryGetLm(System.Collections.Generic.IList<NormalizedLandmark> lm, int idx, out NormalizedLandmark p)

@@ -2,16 +2,16 @@ using UnityEngine;
 
 public abstract class PoseRuleBase : MonoBehaviour
 {
-    // เรียกตอนเริ่ม session
-    public virtual void OnSessionStart() {}
+    // ✅ ค่าประจำท่า (ให้แต่ละท่า override ได้)
+    public virtual string PoseName => gameObject.name;
+    public virtual float DurationSec => 60f;
+    public virtual int PassBonusScore => 100;
 
-    // เรียกตอนจบ session
+    public virtual void OnSessionStart() {}
     public virtual void OnSessionEnd() {}
 
-    // ให้ rule ประมวลผล frame นี้ แล้วส่งผลกลับว่าเฟรมนี้ “ถูกไหม”
-    // ถ้าหาข้อมูล pose ไม่ได้ (หลุดเฟรม) ให้ return false และ valid=false
+    // return: correct?  | out valid: pose data valid?
     public abstract bool EvaluateThisFrame(out bool valid);
 
-    // ข้อมูล debug ให้ UI โชว์ได้ (optional)
     public virtual string GetDebugText() => "";
 }

@@ -8,20 +8,19 @@ public class TimedPoseEvaluator : MonoBehaviour
 
     [Header("Session")]
     public KeyCode startKey = KeyCode.A;
-    public float sessionDuration = 60f;   // ✅ เพิ่มตัวนี้
     public float checkInterval = 5f;
 
-    [Header("Pass & Score")]
-    [Range(0f, 1f)] public float passThreshold = 0.50f; // GOOD >= 50% = ผ่าน
-    public int passBonusScore = 100;
-
-    [Header("Bucket grading")]
-    [Range(0f, 1f)] public float bucketGoodMinCorrectRatio = 0.50f; // ใน bucket ต้องถูก >= 50% ถึงนับเป็น GOOD
-    public int minValidFramesPerBucket = 5; // valid น้อยกว่านี้ถือ BAD (pose หลุด)
+    [Header("Pass Rule")]
+    [Range(0f, 1f)] public float passThreshold = 0.50f;
+    [Range(0f, 1f)] public float bucketGoodMinCorrectRatio = 0.50f;
 
     [Header("UI")]
-    [SerializeField] private TMP_Text statusText; // ระหว่างทำ
-    [SerializeField] private TMP_Text resultText; // สรุปตอนจบ
+    [SerializeField] private TMP_Text statusText;
+    [SerializeField] private TMP_Text resultText;
+
+    // runtime (มาจาก rule)
+    private float _durationRuntime = 60f;
+    private int _bonusRuntime = 100;
 
     // session state
     private bool _sessionActive;
@@ -34,11 +33,11 @@ public class TimedPoseEvaluator : MonoBehaviour
     private int _framesValid;
     private int _framesCorrect;
 
-    // overall buckets result
+    // overall buckets
     private int _goodBuckets;
     private int _badBuckets;
 
-    private int TotalBucketsPlanned => Mathf.CeilToInt(sessionDuration / checkInterval);
+    private int TotalBucketsPlanned => Mathf.CeilToInt(_durationRuntime / checkInterval);
 
     private void Awake()
     {
@@ -67,10 +66,8 @@ public class TimedPoseEvaluator : MonoBehaviour
             _bucketIndex++;
         }
 
-        if (_sessionTimer >= sessionDuration)
-        {
+        if (_sessionTimer >= _durationRuntime)
             EndSession();
-        }
     }
 
     public void StartSession()
@@ -80,6 +77,9 @@ public class TimedPoseEvaluator : MonoBehaviour
             WriteStatus("❌ ยังไม่ได้ใส่ Rule (PoseRuleBase) ใน Inspector");
             return;
         }
+
+        _durationRuntime = Mathf.Max(1f, rule.DurationSec);
+        _bonusRuntime = rule.PassBonusScore;
 
         _sessionActive = true;
         _sessionTimer = 0f;
@@ -93,16 +93,14 @@ public class TimedPoseEvaluator : MonoBehaviour
         rule.OnSessionStart();
 
         WriteResult("");
-        WriteStatus("▶ เริ่มวัดผล...");
+        WriteStatus($"▶ เริ่ม: {rule.PoseName} ({_durationRuntime:0}s)");
     }
 
     public void EndSession()
     {
-        // นับ bucket เศษท้าย (ถ้ามีข้อมูลสะสม)
+        // ตัดเศษ bucket สุดท้าย
         if (_framesTotal > 0)
-        {
             GradeBucketAndCount(finalPartial: true);
-        }
 
         _sessionActive = false;
         rule.OnSessionEnd();
@@ -114,9 +112,9 @@ public class TimedPoseEvaluator : MonoBehaviour
         if (pass)
         {
             if (ScoreManager.Instance != null)
-                ScoreManager.Instance.AddScore(passBonusScore);
+                ScoreManager.Instance.AddScore(_bonusRuntime);
 
-            WriteResult($"✅ ผ่าน!\nGOOD {_goodBuckets}/{totalBuckets} ({goodRatio:P0})\n+{passBonusScore} คะแนน");
+            WriteResult($"✅ ผ่าน!\nGOOD {_goodBuckets}/{totalBuckets} ({goodRatio:P0})\n+{_bonusRuntime} คะแนน");
         }
         else
         {
@@ -135,30 +133,19 @@ public class TimedPoseEvaluator : MonoBehaviour
 
     private void EvaluateFrame()
     {
+        _framesTotal++;
+
         bool valid;
         bool correct = rule.EvaluateThisFrame(out valid);
 
-        // นับทุกเฟรมเป็น "valid สำหรับการคิดสัดส่วน" เพื่อให้หลุด = bad
+        // ✅ หลุด tracking = นับเป็นผิด (BAD) ด้วย
         _framesValid++;
-
-        if (valid && correct)
-        {
-            _framesCorrect++;
-        }
-        // ถ้า valid=false จะไม่เพิ่ม correct => เท่ากับผิด (BAD) อัตโนมัติ
+        if (valid && correct) _framesCorrect++;
     }
 
     private void GradeBucketAndCount(bool finalPartial = false)
     {
-        // ถ้า valid น้อยไป = BAD
-        if (_framesValid < minValidFramesPerBucket)
-        {
-            _badBuckets++;
-            Debug.Log(finalPartial ? "[FINAL] BAD (pose lost)" : $"[Bucket {_bucketIndex}] BAD (pose lost)");
-            return;
-        }
-
-        float correctRatio = (float)_framesCorrect / _framesValid; // 0..1
+        float correctRatio = (_framesValid <= 0) ? 0f : (float)_framesCorrect / _framesValid;
         bool bucketIsGood = correctRatio >= bucketGoodMinCorrectRatio;
 
         if (bucketIsGood) _goodBuckets++;
@@ -166,8 +153,7 @@ public class TimedPoseEvaluator : MonoBehaviour
 
         int secFrom = _bucketIndex * (int)checkInterval;
         int secTo = secFrom + (int)checkInterval;
-
-        Debug.Log($"[{secFrom:00}-{secTo:00}s] {(bucketIsGood ? "GOOD" : "BAD")} | correct={correctRatio:P0} | validFrames={_framesValid}");
+        Debug.Log($"[{secFrom:00}-{secTo:00}s] {(bucketIsGood ? "GOOD" : "BAD")} | correct={correctRatio:P0} | frames={_framesValid}");
     }
 
     private void UpdateLiveUI()
@@ -177,13 +163,14 @@ public class TimedPoseEvaluator : MonoBehaviour
         int totalBucketsCounted = Mathf.Max(1, _goodBuckets + _badBuckets);
         float goodRatio = (float)_goodBuckets / totalBucketsCounted;
 
-        int sec = Mathf.Clamp(Mathf.FloorToInt(_sessionTimer), 0, (int)sessionDuration);
+        int sec = Mathf.Clamp(Mathf.FloorToInt(_sessionTimer), 0, (int)_durationRuntime);
         int bucketNo = Mathf.Clamp(_bucketIndex + 1, 1, TotalBucketsPlanned);
 
         statusText.text =
-            $"เวลา: {sec:00}/{(int)sessionDuration:00}s | ช่วง: {bucketNo}/{TotalBucketsPlanned}\n" +
+            $"ท่า: {rule?.PoseName}\n" +
+            $"เวลา: {sec:00}/{(int)_durationRuntime:00}s | ช่วง: {bucketNo}/{TotalBucketsPlanned}\n" +
             $"GOOD: {_goodBuckets} | BAD: {_badBuckets} | GOOD%: {goodRatio:P0}\n" +
-            rule.GetDebugText();
+            (rule != null ? rule.GetDebugText() : "");
     }
 
     private void WriteStatus(string msg)
