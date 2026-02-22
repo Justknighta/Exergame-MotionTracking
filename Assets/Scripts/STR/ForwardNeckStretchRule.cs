@@ -4,19 +4,30 @@ using Mediapipe.Tasks.Vision.PoseLandmarker;
 using Mediapipe.Tasks.Components.Containers;
 using Mediapipe.Unity.Sample.PoseLandmarkDetection;
 
-public class ForwardNeckStretchRule : PoseRuleBase
+public class ForwardBackwardNeckStretchRule : PoseRuleBase
 {
     [Header("References")]
     [SerializeField] private PoseLandmarkerRunner runner;
 
-    [Header("Target (normalized by shoulder width)")]
-    public float targetForward = 0.20f;   // เป้าหมายก้ม (ยิ่งมาก = ก้มมาก) ปรับได้
-    public float tolerance = 0.05f;
+    [Header("Direction")]
+    public bool stretchForward = true;
+    // ✅ ติ๊ก = ก้มคอ (Forward / Chin to chest)
+    // ❌ ไม่ติ๊ก = เงยคอ (Backward / Look up)
+
+    [Header("Threshold (delta from neutral)")]
+    public float forwardThreshold = 0.20f;   // ✅ ก้มเกินค่านี้ = ผ่าน
+    public float backwardThreshold = 0.10f;  // ✅ เงยเกินค่านี้ = ผ่าน
 
     [Header("Smoothing")]
-    [Range(0f, 1f)] public float smoothing = 0.20f;
+    [Range(0f, 1f)] public float smoothing = 0.3f; // เพิ่มนิดให้เด้งน้อยลง
 
-    public override string PoseName => "Forward Neck Stretch";
+    [Header("Calibration")]
+    public float calibrateSeconds = 0.7f; // ช่วงแรกให้ผู้เล่น “หัวตรง” เพื่อเก็บ baseline
+
+    [Header("If direction feels reversed")]
+    public bool invertDelta = false; // ถ้าก้มแล้วควรเป็น + แต่ดันเป็น - ให้ติ๊กอันนี้
+
+    public override string PoseName => stretchForward ? "Forward Neck Stretch" : "Backward Neck Stretch";
     public override float DurationSec => 30f;
     public override int PassBonusScore => 100;
 
@@ -24,13 +35,26 @@ public class ForwardNeckStretchRule : PoseRuleBase
     private bool _hasResult;
     private readonly object _resultLock = new object();
 
-    private float _filteredForward;
-    private float _lastRawForward;
+    private float _filteredDelta;
+    private float _lastRawDelta;
+
+    // baseline calibration
+    private float _baselineRaw;
+    private float _calibTimer;
+    private int _calibCount;
+    private float _calibSum;
+    private bool _baselineReady;
 
     public override void OnSessionStart()
     {
-        _filteredForward = 0f;
-        _lastRawForward = 0f;
+        _filteredDelta = 0f;
+        _lastRawDelta = 0f;
+
+        _baselineRaw = 0f;
+        _calibTimer = 0f;
+        _calibCount = 0;
+        _calibSum = 0f;
+        _baselineReady = false;
     }
 
     private void Awake()
@@ -40,7 +64,7 @@ public class ForwardNeckStretchRule : PoseRuleBase
 
         if (runner == null)
         {
-            Debug.LogError("[ForwardNeckStretchRule] ไม่พบ PoseLandmarkerRunner (ลากใส่ช่อง runner ใน Inspector)");
+            Debug.LogError("[ForwardBackwardNeckStretchRule] ไม่พบ PoseLandmarkerRunner (ลากใส่ช่อง runner ใน Inspector)");
             enabled = false;
             return;
         }
@@ -66,7 +90,7 @@ public class ForwardNeckStretchRule : PoseRuleBase
     {
         valid = false;
 
-        NormalizedLandmark lsP = default, rsP = default, leP = default, reP = default;
+        NormalizedLandmark ls = default, rs = default, le = default, re = default;
         bool ok = false;
 
         lock (_resultLock)
@@ -75,10 +99,10 @@ public class ForwardNeckStretchRule : PoseRuleBase
             {
                 var lm = _result.poseLandmarks[0].landmarks;
                 if (lm != null
-                    && TryGetLm(lm, 11, out lsP) // left shoulder
-                    && TryGetLm(lm, 12, out rsP) // right shoulder
-                    && TryGetLm(lm, 7, out leP)  // left ear
-                    && TryGetLm(lm, 8, out reP)) // right ear
+                    && TryGetLm(lm, 11, out ls) // left shoulder
+                    && TryGetLm(lm, 12, out rs) // right shoulder
+                    && TryGetLm(lm, 7, out le)  // left ear
+                    && TryGetLm(lm, 8, out re)) // right ear
                 {
                     ok = true;
                 }
@@ -88,26 +112,62 @@ public class ForwardNeckStretchRule : PoseRuleBase
         if (!ok) return false;
         valid = true;
 
-        // ใช้ค่า normalized (x,y) โดยตรงพอ (ไม่ต้องแปลงเป็น Vector3 ก็ได้)
-        float shoulderMidY = (lsP.y + rsP.y) * 0.5f;
-        float earMidY = (leP.y + reP.y) * 0.5f;
+        // --- raw metric: earMidY relative to shoulderMidY normalized by shoulder width (with clamp) ---
+        float shoulderMidY = (ls.y + rs.y) * 0.5f;
+        float earMidY = (le.y + re.y) * 0.5f;
 
-        float shoulderWidth = Mathf.Abs(lsP.x - rsP.x) + 1e-5f;
+        float shoulderWidth = Mathf.Abs(ls.x - rs.x);
+        shoulderWidth = Mathf.Max(shoulderWidth, 0.15f); // กันหารแล้วเด้งเวอร์
 
-        // MediaPipe: y มักจะ "มากขึ้นเมื่ออยู่ต่ำลง" บนจอ
-        // ดังนั้น (earMidY - shoulderMidY) มากขึ้น = หูอยู่ต่ำลง = ก้มมากขึ้น
-        float rawForward = (earMidY - shoulderMidY) / shoulderWidth;
+        float raw = (earMidY - shoulderMidY) / shoulderWidth;
 
-        _lastRawForward = rawForward;
-        _filteredForward = Mathf.Lerp(_filteredForward, rawForward, smoothing);
+        // --- calibration baseline (ผู้เล่นควรหัวตรงช่วงแรก) ---
+        if (!_baselineReady)
+        {
+            _calibTimer += Time.deltaTime;
+            _calibSum += raw;
+            _calibCount++;
 
-        bool inTarget = Mathf.Abs(_filteredForward - targetForward) <= tolerance;
+            if (_calibTimer >= calibrateSeconds && _calibCount > 0)
+            {
+                _baselineRaw = _calibSum / _calibCount;
+                _baselineReady = true;
+            }
+
+            _lastRawDelta = 0f;
+            _filteredDelta = Mathf.Lerp(_filteredDelta, 0f, smoothing);
+            return false; // ระหว่างคาลิเบรตยังไม่ให้ผ่าน/ไม่ผ่าน
+        }
+
+        // --- delta from neutral ---
+        float delta = raw - _baselineRaw;
+        if (invertDelta) delta = -delta;
+
+        _lastRawDelta = delta;
+        _filteredDelta = Mathf.Lerp(_filteredDelta, delta, smoothing);
+
+        // ✅ NEW: ใช้ threshold ไม่ใช้ target±tol
+        bool inTarget;
+        if (stretchForward)
+        {
+            // ก้ม: delta ต้อง "มากพอ" (>= threshold)
+            inTarget = _filteredDelta >= forwardThreshold;
+        }
+        else
+        {
+            // เงย: delta ต้อง "น้อยพอในทิศตรงข้าม" (<= -threshold)
+            inTarget = _filteredDelta <= -backwardThreshold;
+        }
+
         return inTarget;
     }
 
     public override string GetDebugText()
     {
-        return $"Forward raw/filtered: {_lastRawForward:F3}/{_filteredForward:F3} | target={targetForward:F3} tol=±{tolerance:F3}";
+        string dir = stretchForward ? "FORWARD" : "BACKWARD";
+        string cal = _baselineReady ? "CAL:OK" : $"CAL:{_calibTimer:F1}/{calibrateSeconds:F1}s";
+        string thr = stretchForward ? $">={forwardThreshold:F2}" : $"<={-backwardThreshold:F2}";
+        return $"{dir} ({cal}) delta raw/filtered: {_lastRawDelta:F3}/{_filteredDelta:F3} | thr {thr}";
     }
 
     private bool TryGetLm(System.Collections.Generic.IList<NormalizedLandmark> lm, int idx, out NormalizedLandmark p)
