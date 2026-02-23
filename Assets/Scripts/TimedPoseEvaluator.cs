@@ -10,6 +10,14 @@ public class TimedPoseEvaluator : MonoBehaviour
     public KeyCode startKey = KeyCode.A;
     public float checkInterval = 5f;
 
+    [Header("Start Gate (wait until pose is correct)")]
+    public bool waitForCorrectPoseBeforeStart = true;
+    public float requiredHoldBeforeStart = 0.5f; // ต้องค้างท่าถูกกี่วิ ก่อนเริ่มนับจริง
+
+    [Header("Speed Bonus (eligible if start is quick)")]
+    public float maxWaitTime = 10f;     // ✅ ภายในกี่วิถึง "มีสิทธิ์" ได้โบนัส (<=0 = ปิด)
+    public int speedBonusScore = 100;   // ✅ โบนัส (จะได้จริงเฉพาะตอน PASS)
+
     [Header("Pass Rule")]
     [Range(0f, 1f)] public float passThreshold = 0.50f;
     [Range(0f, 1f)] public float bucketGoodMinCorrectRatio = 0.50f;
@@ -22,8 +30,7 @@ public class TimedPoseEvaluator : MonoBehaviour
     private float _durationRuntime = 60f;
     private int _bonusRuntime = 100;
 
-    // session state
-    private bool _sessionActive;
+    // session/bucket state
     private float _sessionTimer;
     private float _bucketTimer;
     private int _bucketIndex;
@@ -36,6 +43,16 @@ public class TimedPoseEvaluator : MonoBehaviour
     // overall buckets
     private int _goodBuckets;
     private int _badBuckets;
+
+    // waiting gate state
+    private float _waitTimer;
+    private float _holdCorrectTimer;
+
+    // ✅ โบนัสแบบ "มีสิทธิ์" (จะบวกจริงตอน PASS เท่านั้น)
+    private bool _eligibleSpeedBonus;
+
+    private enum Phase { Idle, WaitingForPose, Active }
+    private Phase _phase = Phase.Idle;
 
     private int TotalBucketsPlanned => Mathf.CeilToInt(_durationRuntime / checkInterval);
 
@@ -50,7 +67,13 @@ public class TimedPoseEvaluator : MonoBehaviour
         if (Input.GetKeyDown(startKey))
             StartSession();
 
-        if (!_sessionActive) return;
+        if (_phase == Phase.WaitingForPose)
+        {
+            WaitUntilPoseCorrect();
+            return;
+        }
+
+        if (_phase != Phase.Active) return;
 
         _sessionTimer += Time.deltaTime;
         _bucketTimer += Time.deltaTime;
@@ -81,7 +104,7 @@ public class TimedPoseEvaluator : MonoBehaviour
         _durationRuntime = Mathf.Max(1f, rule.DurationSec);
         _bonusRuntime = rule.PassBonusScore;
 
-        _sessionActive = true;
+        // reset everything
         _sessionTimer = 0f;
         _bucketTimer = 0f;
         _bucketIndex = 0;
@@ -90,19 +113,111 @@ public class TimedPoseEvaluator : MonoBehaviour
         _badBuckets = 0;
 
         ResetBucket();
-        rule.OnSessionStart();
 
+        _waitTimer = 0f;
+        _holdCorrectTimer = 0f;
+        _eligibleSpeedBonus = false;
+
+        rule.OnSessionStart();
         WriteResult("");
+
+        if (waitForCorrectPoseBeforeStart)
+        {
+            _phase = Phase.WaitingForPose;
+
+            string bonusInfo = (maxWaitTime > 0f)
+                ? $"\n🎁 ทำทันภายใน {maxWaitTime:0}s = มีสิทธิ์โบนัส +{speedBonusScore} (ได้จริงเมื่อผ่านเท่านั้น)"
+                : "";
+
+            WriteStatus($"⏳ เข้าท่าให้ถูกก่อน แล้วค้าง {requiredHoldBeforeStart:0.0}s เพื่อเริ่มนับเวลา\nท่า: {rule.PoseName}{bonusInfo}");
+            return;
+        }
+
+        _phase = Phase.Active;
         WriteStatus($"▶ เริ่ม: {rule.PoseName} ({_durationRuntime:0}s)");
+    }
+
+    private void WaitUntilPoseCorrect()
+    {
+        if (rule == null)
+        {
+            _phase = Phase.Idle;
+            WriteStatus("❌ ไม่มี Rule");
+            return;
+        }
+
+        _waitTimer += Time.deltaTime;
+
+        bool valid;
+        bool correct = rule.EvaluateThisFrame(out valid);
+
+        // ต้อง valid + correct ต่อเนื่องเท่านั้นถึงนับ hold
+        if (valid && correct) _holdCorrectTimer += Time.deltaTime;
+        else _holdCorrectTimer = 0f;
+
+        // UI ระหว่างรอ
+        if (statusText != null)
+        {
+            string bonusLine = "";
+            if (maxWaitTime > 0f)
+            {
+                float remain = Mathf.Max(0f, maxWaitTime - _waitTimer);
+                bonusLine = $"\nโบนัส: ทำทันภายใน {maxWaitTime:0}s (เหลือ {remain:0.0}s)";
+            }
+
+            statusText.text =
+                $"⏳ รอเข้าท่าให้ถูก: {rule.PoseName}\n" +
+                $"ค้างถูก: {_holdCorrectTimer:0.0}/{requiredHoldBeforeStart:0.0}s" +
+                bonusLine + "\n" +
+                (rule != null ? rule.GetDebugText() : "");
+        }
+
+        // ครบเงื่อนไข → เริ่มนับจริง
+        if (_holdCorrectTimer >= requiredHoldBeforeStart)
+        {
+            // ✅ แค่ "บันทึกสิทธิ์โบนัส" ยังไม่ AddScore
+            _eligibleSpeedBonus = (maxWaitTime > 0f && _waitTimer <= maxWaitTime);
+
+            WriteResult(_eligibleSpeedBonus
+                ? $"🎁 ทำทัน! โบนัส +{speedBonusScore} (จะได้เมื่อผ่านเท่านั้น)"
+                : "");
+
+            _phase = Phase.Active;
+
+            // เริ่มนับจริงจากศูนย์ ณ ตอนที่เข้าท่าถูก
+            _sessionTimer = 0f;
+            _bucketTimer = 0f;
+            _bucketIndex = 0;
+
+            _goodBuckets = 0;
+            _badBuckets = 0;
+            ResetBucket();
+
+            WriteStatus($"▶ เริ่มนับเวลาแล้ว: {rule.PoseName} ({_durationRuntime:0}s)");
+            return;
+        }
+
+        // ✅ ไม่ยกเลิกเมื่อรอนาน (ไม่จำกัดเวลา)
     }
 
     public void EndSession()
     {
+        if (_phase == Phase.Idle) return;
+
+        // ถ้ายังรออยู่ ให้จบเฉย ๆ
+        if (_phase == Phase.WaitingForPose)
+        {
+            _phase = Phase.Idle;
+            rule.OnSessionEnd();
+            WriteStatus("⏹ ยกเลิกก่อนเริ่มนับเวลา — กด A เพื่อเริ่มใหม่");
+            return;
+        }
+
         // ตัดเศษ bucket สุดท้าย
         if (_framesTotal > 0)
             GradeBucketAndCount(finalPartial: true);
 
-        _sessionActive = false;
+        _phase = Phase.Idle;
         rule.OnSessionEnd();
 
         int totalBuckets = Mathf.Max(1, _goodBuckets + _badBuckets);
@@ -111,14 +226,18 @@ public class TimedPoseEvaluator : MonoBehaviour
 
         if (pass)
         {
-            if (ScoreManager.Instance != null)
-                ScoreManager.Instance.AddScore(_bonusRuntime);
+            int totalAdd = _bonusRuntime + (_eligibleSpeedBonus ? speedBonusScore : 0);
 
-            WriteResult($"✅ ผ่าน!\nGOOD {_goodBuckets}/{totalBuckets} ({goodRatio:P0})\n+{_bonusRuntime} คะแนน");
+            if (ScoreManager.Instance != null)
+                ScoreManager.Instance.AddScore(totalAdd);
+
+            string bonusText = _eligibleSpeedBonus ? $"\n🎁 โบนัสเร็ว +{speedBonusScore}" : "";
+            WriteResult($"✅ ผ่าน!\nGOOD {_goodBuckets}/{totalBuckets} ({goodRatio:P0})\n+{_bonusRuntime} คะแนน{bonusText}\nรวม +{totalAdd} คะแนน");
         }
         else
         {
-            WriteResult($"❌ ไม่ผ่าน\nGOOD {_goodBuckets}/{totalBuckets} ({goodRatio:P0})");
+            // ✅ ไม่ผ่าน = ไม่ได้คะแนนเลย (รวมถึงโบนัส)
+            WriteResult($"❌ ไม่ผ่าน\nGOOD {_goodBuckets}/{totalBuckets} ({goodRatio:P0})\n+0 คะแนน");
         }
 
         WriteStatus("⏹ จบแล้ว — กด A เพื่อเริ่มใหม่");
@@ -138,7 +257,7 @@ public class TimedPoseEvaluator : MonoBehaviour
         bool valid;
         bool correct = rule.EvaluateThisFrame(out valid);
 
-        // ✅ หลุด tracking = นับเป็นผิด (BAD) ด้วย
+        // หลุด tracking = นับเป็นผิด (BAD)
         _framesValid++;
         if (valid && correct) _framesCorrect++;
     }
