@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/MediaPipeUnity/Samples/Scenes/Pose Landmark Detection/avatar.unity
+    guid: cf7f798e639cedb4dbce1f73d8fd7e7f
   m_configObjects: {}
