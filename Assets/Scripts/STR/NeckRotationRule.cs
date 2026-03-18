@@ -13,7 +13,7 @@ public class NeckRotationRule : PoseRuleBase
     public float requiredOffset = 0.05f;  // ระยะที่จมูกต้องเลื่อนไป
     public float smoothing = 0.2f;
     public override string PoseName => "Neck Rotation";
-    public override float DurationSec => 30f;     // ✅ 30 วินาที
+    public override float DurationSec => 20f;     // ✅ 30 วินาที
     public override int PassBonusScore => 100;
 
     private PoseLandmarkerResult _result;

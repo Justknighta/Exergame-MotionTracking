@@ -12,8 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 38b15813ce8f4074b995c93c072fda13, type: 3}
   m_Name: MainPoseSequenceConfig
   m_EditorClassIdentifier: 
-  routineCount: 15
-  bossCount: 10
+  routineCount: 4
+  bossCount: 1
+  routinePoseIDs: 010000000400000002000000
+  bossPoseIDs: 05000000
   warmupReadySeconds: 3
   routineDetectSeconds: 20
   bossDetectSeconds: 10
@@ -22,5 +24,7 @@ MonoBehaviour:
   victoryDelaySeconds: 2
   perfectDamage: 1000
   goodDamage: 500
-  routineInstructions: []
-  bossInstructions: []
+  routineInstructions:
+  - "\u0E17\u0E48\u0E32\u0E17\u0E14\u0E2A\u0E2D\u0E1A routine"
+  bossInstructions:
+  - "\u0E17\u0E48\u0E32\u0E17\u0E14\u0E2A\u0E2D\u0E1A boss"

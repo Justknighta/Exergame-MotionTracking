@@ -6,6 +6,69 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/Home.unity
+    guid: c1dd525c8ab9d467cab100dc5552b8b2
+  - enabled: 1
+    path: Assets/Scenes/Level.unity
+    guid: e2a6113970d8c4670883d2aaebd11f00
+  - enabled: 1
+    path: Assets/Scenes/Shop.unity
+    guid: 7d0d0ca8f965f466c87903eb11e0389c
+  - enabled: 1
+    path: Assets/Scenes/Tutorial.unity
+    guid: b6622917478fd491f89ff60f315e0467
+  - enabled: 1
+    path: Assets/Scenes/ModeLv1.unity
+    guid: 9264da3720ff64bbebc168e393ec2072
+  - enabled: 1
+    path: Assets/Scenes/ModeLv2.unity
+    guid: e04c48742e11647468caf600eb58a7d6
+  - enabled: 1
+    path: Assets/Scenes/ModeLv3.unity
+    guid: e1811211564884cbab678547856e120c
+  - enabled: 1
+    path: Assets/Scenes/ModeLv4.unity
+    guid: 0f74f2f91409f48fb95b17dea2c2e207
+  - enabled: 1
+    path: Assets/Scenes/ModeLv5.unity
+    guid: deece657138ee4a95b3c1f92ef17c1c7
+  - enabled: 1
+    path: Assets/Scenes/TestScene/Fortest.unity
+    guid: 536e15f005c115342af44608e226359d
+  - enabled: 1
+    path: Assets/Scenes/TestScene/Gameplay.unity
+    guid: 9106d9391e655499b8a728d4ce76c89e
+  - enabled: 1
+    path: Assets/Scenes/Score.unity
+    guid: 0ea35da1d0f484e9895ceb2f95b3a3bf
+  - enabled: 1
+    path: Assets/Scenes/GameOver.unity
+    guid: 8b8615fb0ff8747aab729be1f32e6dfa
+  - enabled: 1
+    path: Assets/Scenes/Tutorial_Easy.unity
+    guid: be7ef20c3345c4bcda65ead3bea30456
+  - enabled: 1
+    path: Assets/Scenes/Tutorial_Medium.unity
+    guid: 97785985c9735436ba01ae06831198c6
+  - enabled: 1
+    path: Assets/Scenes/Tutorial_Pro.unity
+    guid: b983c13482a664ecda5076ac11828d28
+  - enabled: 1
+    path: Assets/Scenes/ScoreEasy.unity
+    guid: 03d5655a749d149beba712825cb8597e
+  - enabled: 1
+    path: Assets/Scenes/GameplayLv1.unity
+    guid: ac06afbf9f0c54a5eb72cf6906dd1424
+  - enabled: 1
+    path: Assets/Scenes/GameplayLv3.unity
+    guid: de9070659869542da869376889f3a08a
+  - enabled: 1
+    path: Assets/Scenes/GameplayEasyLv1.unity
+    guid: f6205a19cd9314041bbf9d93f3327df9
+  - enabled: 1
+    path: Assets/Scenes/GameplayEasyLv3.unity
+    guid: b1a83725374014061bb38f775e2f0e61
+  - enabled: 1
     path: Assets/MediaPipeUnity/Samples/Scenes/Pose Landmark Detection/avatar.unity
     guid: cf7f798e639cedb4dbce1f73d8fd7e7f
   m_configObjects: {}

@@ -21,7 +21,7 @@ public class CrossBodyArmStretchRule : PoseRuleBase
     [Range(0f,1f)] public float smoothing = 0.3f;
 
     public override string PoseName => "Cross-body Arm Stretch";
-    public override float DurationSec => 15f;
+    public override float DurationSec => 20f;
     public override int PassBonusScore => 100;
 
     private PoseLandmarkerResult _result;

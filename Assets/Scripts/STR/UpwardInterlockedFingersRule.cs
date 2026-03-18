@@ -22,7 +22,7 @@ public class UpwardInterlockedFingersRule : PoseRuleBase
     [Range(0f, 1f)] public float smoothing = 0.35f;
 
     public override string PoseName => "Upward Facing (Elbows Up)";
-    public override float DurationSec => 30f;
+    public override float DurationSec => 20f;
     public override int PassBonusScore => 100;
 
     private PoseLandmarkerResult _result;

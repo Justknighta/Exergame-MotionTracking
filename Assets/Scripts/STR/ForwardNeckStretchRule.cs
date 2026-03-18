@@ -28,7 +28,7 @@ public class ForwardBackwardNeckStretchRule : PoseRuleBase
     public bool invertDelta = false; // ถ้าก้มแล้วควรเป็น + แต่ดันเป็น - ให้ติ๊กอันนี้
 
     public override string PoseName => stretchForward ? "Forward Neck Stretch" : "Backward Neck Stretch";
-    public override float DurationSec => 30f;
+    public override float DurationSec => 20f;
     public override int PassBonusScore => 100;
 
     private PoseLandmarkerResult _result;
