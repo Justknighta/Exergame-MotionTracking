@@ -23,6 +23,10 @@ public class GameplayController : MonoBehaviour
         Perfect,
         Good
     }
+    
+    [Header("Pose Runtime")]
+    [SerializeField] private PoseLibrary poseLibrary;
+    [SerializeField] private PoseDetectionBridge poseBridge;
 
     [Header("Scene Refs")]
     [SerializeField] private LeftWindowUIController leftUI;
@@ -170,6 +174,7 @@ public class GameplayController : MonoBehaviour
 
     private void ExitState(State state)
     {
+        poseBridge?.ClearRule();
         timer?.Cancel();
 
         if (_stateSequenceRoutine != null)
@@ -313,6 +318,21 @@ public class GameplayController : MonoBehaviour
                 if (IsRunStale()) return;
                 OnDetectTimerCompleted(isBoss);
             });
+        int poseId = isBoss
+        ? (config != null ? config.GetBossPoseID(index) : -1)
+        : (config != null ? config.GetRoutinePoseID(index) : -1);
+
+    PoseRuleBase rule = null;
+    if (poseLibrary != null && poseId >= 0)
+        rule = poseLibrary.GetByID(poseId);
+
+    if (poseBridge != null)
+    {
+        poseBridge.SetGameplay(this);
+        poseBridge.SetRule(rule);
+    }
+
+    Debug.Log($"[Gameplay] Detect {(isBoss ? "Boss" : "Routine")} #{index} -> PoseID={poseId} -> Rule={(rule != null ? rule.DisplayName : "NULL")}");
     }
 
     private void OnDetectTimerCompleted(bool isBoss)

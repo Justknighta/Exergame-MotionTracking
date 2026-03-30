@@ -9,6 +9,12 @@ public class PoseDetectionBridge : MonoBehaviour
     private float okTimer = 0f;
     private bool alreadySent = false;
 
+    private void Awake()
+    {
+        if (gameplay == null)
+            gameplay = FindFirstObjectByType<GameplayController>();
+    }
+
     public void SetGameplay(GameplayController controller)
     {
         gameplay = controller;
